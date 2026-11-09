@@ -17,3 +17,7 @@ S.applyPacket(s, { cardio: { pulseRate: [{ value: 71, confidence: 87 }], arteria
 assert.equal(s.pulse, 71); assert.ok(Math.abs(s.conf - 0.87) < 1e-9, 'confidence is a percentage'); assert.equal(s.breath, 13); assert.ok(s.blink, 'blink inside a batch counts'); assert.equal(s.waves.length, 2);
 S.applyPacket(s, {}); assert.equal(s.pulse, 71, 'empty packet keeps last reading'); assert.equal(s.blink, false); assert.equal(s.waves.length, 0);
 console.log('realistic finish dist', r.dist.toFixed(1), 'blinks', r.blinks); console.log('ok; calm finish dist', f.dist.toFixed(1), 'panic caught at t', x.t.toFixed(1));
+
+{ const n = H.create(); run(n, calm, 21); run(n, { ...calm, pulse: 90 }, 10); run(n, { ...calm, breath: 8 }, 6); run(n, calm, 3);
+  const s = H.notes(n); assert.equal(s.peak, 90); assert.equal(s.over, 20); assert.equal(s.calmN, 1); assert.ok(s.calmS >= 5 && s.calmS <= 7, 'calm seconds ' + s.calmS); assert.ok(n.log.length >= 19 && n.log.length <= 22);
+  const p = H.create(), q = H.create(); run(p, calm, 21); run(q, calm, 21); q.log = null; q.nextLog = Infinity; run(p, { ...calm, pulse: 80 }, 40); run(q, { ...calm, pulse: 80 }, 40); assert.equal(p.dist, q.dist, 'the record must not change the rules'); }

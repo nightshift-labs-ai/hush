@@ -4,7 +4,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%}
 #o{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;pointer-events:none}
 #o .c{max-width:560px;max-height:92vh;overflow:auto;box-sizing:border-box;padding:28px 36px;background:rgba(6,6,8,.82);border:1px solid #3a3226;border-radius:4px;pointer-events:auto}
 h1{font-weight:400;letter-spacing:.32em;margin:0 0 14px;font-size:44px}p{line-height:1.55;margin:10px 0;font-size:17px}small{color:#8e8775;font-size:13px;line-height:1.5;display:block;margin-top:12px}
-button{margin-top:16px;background:#1a1712;color:#efe7d4;border:1px solid #6a5a3e;padding:11px 26px;font:17px Georgia,serif;cursor:pointer}button:hover{background:#2a241a}</style></head>
+h2{font-weight:400;font-size:15px;letter-spacing:.22em;text-transform:uppercase;color:#a79f8d;margin:20px 0 8px}#notes{position:static;inset:auto;display:block;width:100%;height:190px}p.h{font-style:italic;font-size:16px;margin:7px 0}button{margin-top:16px;background:#1a1712;color:#efe7d4;border:1px solid #6a5a3e;padding:11px 26px;font:17px Georgia,serif;cursor:pointer}button:hover{background:#2a241a}</style></head>
 <body><canvas id="v"></canvas><div id="o"></div>
 <script src="art.js" onerror="void 0"></script><script src="game.js"></script><script src="mock.js"></script><script src="dist/body.bundle.js" onerror="void 0"></script>
 <script>
@@ -29,7 +29,7 @@ function consent(){if(MOCK&&!RECORD){show(`<h1>HUSH</h1><p>Something in the dark
 function setupAudio(){if(ac)return;ac=new (window.AudioContext||window.webkitAudioContext)();master=ac.createGain();master.connect(ac.destination);recDest=ac.createMediaStreamDestination();master.connect(recDest)}
 function mockPad(){if(window.__pad)return;const d=window.__pad=document.createElement('div');d.style.cssText='position:fixed;left:0;right:0;bottom:110px;display:flex;justify-content:center;flex-wrap:wrap;gap:8px;z-index:9;touch-action:none;user-select:none;-webkit-user-select:none';
  for(const [k,l] of [['panic','Panic (P)'],['calm','Breathe slowly (C)'],['lost','Lose tracking (L)']]){const b=document.createElement('button');b.textContent=l;b.dataset.pad=k;b.style.cssText='margin:0;padding:12px 14px;font:15px Georgia,serif;opacity:.82;touch-action:none';const on=e=>{e.preventDefault();keys[k]=1},off=e=>{e.preventDefault();keys[k]=0};b.addEventListener('pointerdown',on);for(const ev of ['pointerup','pointercancel','pointerleave'])b.addEventListener(ev,off);b.addEventListener('contextmenu',e=>e.preventDefault());d.appendChild(b)}document.body.appendChild(d)}
-async function begin(){setupAudio();g=Hush.create();seen=false;show('');startDread();if(MOCK&&!RECORD)mockPad();
+async function begin(){setupAudio();g=Hush.create();seen=false;show('');startDread();if(MOCK&&!RECORD){mockPad();window.__pad.style.visibility=''}
  if(MOCK){if(RECORD){camS=camS||await navigator.mediaDevices.getUserMedia({video:{width:640,height:360}});startRec()}return}
  if(camS){if(RECORD)startRec();return}
  const apiKey=await window.hushKey();if(!apiKey){show('<h1>No key</h1><p>Start the game with SMARTSPECTRA_API_KEY set in the environment.</p>');return}
@@ -57,7 +57,27 @@ function startRec(){if(rec)return;const C=document.createElement('canvas');C.wid
  const chunks=[],mr=new MediaRecorder(st,{mimeType:'video/webm;codecs=vp8,opus',videoBitsPerSecond:25e5});mr.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
  mr.onstop=()=>{clearInterval(t0);const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(chunks,{type:'video/webm'}));a.download='hush-demo.webm';a.click();rec=null};mr.start(1000);rec=mr}
 function stopRec(){if(rec&&rec.state!='inactive')setTimeout(()=>rec&&rec.stop(),2500)}
-function endCard(){const w=g.phase=='won';show(`<h1>${w?'DAWN':'FOUND'}</h1><p>${w?'The light comes back. It never found you.':g.reason=='blink'?'It came on the blink.':'It followed your heartbeat.'}</p><p>It learned your heartbeat at ${Math.round(g.basePulse)}. Blinks it heard: ${g.blinks}.</p><small>${RECORD?'Saving the clip to your Desktop. Wait a few seconds before closing.':'Nothing was saved.'}</small><button id=go>Again</button>`);document.getElementById('go').onclick=begin;stopRec()}
+function clock(t){t=Math.max(0,Math.round(t));return Math.floor(t/60)+':'+String(t%60).padStart(2,'0')}
+function endCard(){if(window.__pad)window.__pad.style.visibility='hidden';const w=g.phase=='won',n=Hush.notes(g),has=g.log.length>1,pl=(k,o)=>k==1?o:o+'s';
+ const heard=has?[n.over>=4?`You were loudest at ${clock(n.peakT)}: ${n.peak} beats a minute, ${n.over} over your own calm.`:'Your heart never gave you away.',
+  n.calmN?`You went quiet for ${n.calmS} ${pl(n.calmS,'second')}. I lost you ${n.calmN==1?'once':n.calmN+' times'}.`:'You never slowed your breath. I never lost you.',
+  n.blinks?`You blinked ${n.blinks} ${pl(n.blinks,'time')}. I took a step each time.`:'You never blinked. I did not move for that.'].map(l=>`<p class=h>${l}</p>`).join(''):'';
+ show(`<h1>${w?'DAWN':'FOUND'}</h1><p>${w?'The light comes back. It never found you.':g.reason=='blink'?'It came on the blink.':'It followed your heartbeat.'}</p>${has?`<h2>What it heard</h2><canvas id=notes role=img aria-label="Your pulse and how far away it was, over the round"></canvas>${heard}<small>${MOCK?'A simulated body played this round; no camera was used.':'Camera estimates, compared only with you. Not a medical reading.'}</small>`:''}<small>${RECORD?'Saving the clip to your Desktop. Wait a few seconds before closing.':'Nothing was saved.'}</small><button id=go>Again</button>`);if(has)drawNotes();document.getElementById('go').onclick=begin;stopRec()}
+// Two panels on one time axis, one measure each: pulse above, its distance below.
+function drawNotes(){const c=document.getElementById('notes'),css=c.getBoundingClientRect(),dp=devicePixelRatio||1,w=css.width,h=css.height;c.width=w*dp;c.height=h*dp;
+ const k=c.getContext('2d');k.scale(dp,dp);const L=g.log,tEnd=L[L.length-1].t||1,l=8,r=w-8,X=t=>l+(r-l)*t/tEnd,t1=16,b1=h*.62,t2=b1+22,b2=h-18,mute='#8e8775',ink='#d8d2c4';
+ const ps=L.map(a=>a.p),lo=Math.min(g.basePulse-8,...ps),hi=Math.max(g.basePulse+12,...ps),Y=p=>b1-(b1-t1)*(p-lo)/(hi-lo),D=d=>b2-(b2-t2)*d/Hush.CFG.start;
+ k.font='12px Georgia,serif';k.textBaseline='alphabetic';
+ k.fillStyle='rgba(79,143,200,.22)';let first=null;for(let i=0;i<L.length;){if(!L[i].calm){i++;continue}let e=i;while(e+1<L.length&&L[e+1].calm)e++;const a=X(L[i].t),z=X(L[Math.min(e+1,L.length-1)].t);k.fillRect(a,t1,Math.max(2,z-a),b2-t1);if(z-a>70&&!first)first=[a,t1];i=e+1}
+ k.strokeStyle='#4a4334';k.lineWidth=1;k.setLineDash([3,4]);k.beginPath();k.moveTo(l,Y(g.basePulse));k.lineTo(r,Y(g.basePulse));k.stroke();k.setLineDash([]);
+ k.strokeStyle='#332d22';k.beginPath();k.moveTo(l,b2);k.lineTo(r,b2);k.stroke();
+ k.strokeStyle='#c9a35a';k.lineWidth=1.5;g.blinkT.forEach(t=>{k.beginPath();k.moveTo(X(t),b1+2);k.lineTo(X(t),b1+9);k.stroke()});
+ const line=(col,f)=>{k.strokeStyle=col;k.lineWidth=2;k.lineJoin='round';k.lineCap='round';k.beginPath();L.forEach((a,i)=>{const px=X(a.t),py=f(a);i?k.lineTo(px,py):k.moveTo(px,py)});k.stroke()};
+ line('#e0604f',a=>Y(a.p));line('#a79f8d',a=>D(a.d));
+ k.fillStyle=ink;k.textAlign='left';k.fillText('Your heart',l,12);k.fillText('How far away it was',l,t2-5);
+ k.fillStyle=mute;k.textAlign='right';k.fillText('your calm: '+Math.round(g.basePulse),r,12);k.fillText('blinks',r,b1+20);
+ k.textAlign='left';k.fillText('0:00',l,h-3);k.textAlign='right';k.fillText(clock(tEnd),r,h-3);k.textAlign='center';k.fillText('you',(l+r)/2,h-3);
+ if(first){k.fillStyle='#9cc3e4';k.textAlign='left';k.fillText('it lost you',first[0]+5,t1+13)}}
 let last=performance.now();
 function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
  if(g){const prev=g.phase;if(MOCK){const s=mock.tick(dt,keys);sig=s}
