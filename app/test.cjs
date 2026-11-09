@@ -21,3 +21,4 @@ console.log('realistic finish dist', r.dist.toFixed(1), 'blinks', r.blinks); con
 { const n = H.create(); run(n, calm, 21); run(n, { ...calm, pulse: 90 }, 10); run(n, { ...calm, breath: 8 }, 6); run(n, calm, 3);
   const s = H.notes(n); assert.equal(s.peak, 90); assert.equal(s.over, 20); assert.equal(s.calmN, 1); assert.ok(s.calmS >= 5 && s.calmS <= 7, 'calm seconds ' + s.calmS); assert.ok(n.log.length >= 19 && n.log.length <= 22);
   const p = H.create(), q = H.create(); run(p, calm, 21); run(q, calm, 21); q.log = null; q.nextLog = Infinity; run(p, { ...calm, pulse: 80 }, 40); run(q, { ...calm, pulse: 80 }, 40); assert.equal(p.dist, q.dist, 'the record must not change the rules'); }
+{ const n = H.create(); run(n, calm, 21); run(n, { ...calm, pulse: 140 }, 1); run(n, calm, 8); assert.equal(H.notes(n).peak, 70, 'one spike is not the peak'); }

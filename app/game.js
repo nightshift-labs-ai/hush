@@ -32,16 +32,19 @@
     return g;
   }
   // What the end screen says about a finished round.
+  // Camera pulse is noisy: the end screen shows a 5-sample median, so one bad reading is not the "peak".
+  function smooth(log) { return log.map((r, i) => median(log.slice(Math.max(0, i - 2), i + 3).map(x => x.p))); }
   function notes(g) {
     let peak = 0, peakT = 0, closest = CFG.start, calmS = 0, calmN = 0, was = false;
+    const ps = smooth(g.log);
     g.log.forEach((r, i) => {
-      if (r.p > peak) { peak = r.p; peakT = r.t; }
+      if (ps[i] > peak) { peak = ps[i]; peakT = r.t; }
       closest = Math.min(closest, r.d);
       if (r.calm) { calmS += i ? r.t - g.log[i - 1].t : 0; if (!was) calmN++; }
       was = r.calm;
     });
     return { peak: Math.round(peak), peakT, over: Math.round(peak - g.basePulse), closest: Math.round(closest), calmS: Math.round(calmS), calmN, blinks: g.blinks };
   }
-  const api = { CFG, create, step, median, notes };
+  const api = { CFG, create, step, median, notes, smooth };
   if (typeof module !== 'undefined') module.exports = api; else root.Hush = api;
 })(typeof window !== 'undefined' ? window : globalThis);

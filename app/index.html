@@ -67,14 +67,14 @@ function endCard(){if(window.__pad)window.__pad.style.visibility='hidden';const 
 // Two panels on one time axis, one measure each: pulse above, its distance below.
 function drawNotes(){const c=document.getElementById('notes'),css=c.getBoundingClientRect(),dp=devicePixelRatio||1,w=css.width,h=css.height;c.width=w*dp;c.height=h*dp;
  const k=c.getContext('2d');k.scale(dp,dp);const L=g.log,tEnd=L[L.length-1].t||1,l=8,r=w-8,X=t=>l+(r-l)*t/tEnd,t1=16,b1=h*.62,t2=b1+22,b2=h-18,mute='#8e8775',ink='#d8d2c4';
- const ps=L.map(a=>a.p),lo=Math.min(g.basePulse-8,...ps),hi=Math.max(g.basePulse+12,...ps),Y=p=>b1-(b1-t1)*(p-lo)/(hi-lo),D=d=>b2-(b2-t2)*d/Hush.CFG.start;
+ const ps=Hush.smooth(L),lo=Math.min(g.basePulse-8,...ps),hi=Math.max(g.basePulse+12,...ps),Y=p=>b1-(b1-t1)*(p-lo)/(hi-lo),D=d=>b2-(b2-t2)*d/Hush.CFG.start;
  k.font='12px Georgia,serif';k.textBaseline='alphabetic';
  k.fillStyle='rgba(79,143,200,.22)';let first=null;for(let i=0;i<L.length;){if(!L[i].calm){i++;continue}let e=i;while(e+1<L.length&&L[e+1].calm)e++;const a=X(L[i].t),z=X(L[Math.min(e+1,L.length-1)].t);k.fillRect(a,t1,Math.max(2,z-a),b2-t1);if(z-a>70&&!first)first=[a,t1];i=e+1}
  k.strokeStyle='#4a4334';k.lineWidth=1;k.setLineDash([3,4]);k.beginPath();k.moveTo(l,Y(g.basePulse));k.lineTo(r,Y(g.basePulse));k.stroke();k.setLineDash([]);
  k.strokeStyle='#332d22';k.beginPath();k.moveTo(l,b2);k.lineTo(r,b2);k.stroke();
  k.strokeStyle='#c9a35a';k.lineWidth=1.5;g.blinkT.forEach(t=>{k.beginPath();k.moveTo(X(t),b1+2);k.lineTo(X(t),b1+9);k.stroke()});
- const line=(col,f)=>{k.strokeStyle=col;k.lineWidth=2;k.lineJoin='round';k.lineCap='round';k.beginPath();L.forEach((a,i)=>{const px=X(a.t),py=f(a);i?k.lineTo(px,py):k.moveTo(px,py)});k.stroke()};
- line('#e0604f',a=>Y(a.p));line('#a79f8d',a=>D(a.d));
+ const line=(col,f)=>{k.strokeStyle=col;k.lineWidth=2;k.lineJoin='round';k.lineCap='round';k.beginPath();L.forEach((a,i)=>{const px=X(a.t),py=f(a,i);i?k.lineTo(px,py):k.moveTo(px,py)});k.stroke()};
+ line('#e0604f',(a,i)=>Y(ps[i]));line('#a79f8d',a=>D(a.d));
  k.fillStyle=ink;k.textAlign='left';k.fillText('Your heart',l,12);k.fillText('How far away it was',l,t2-5);
  k.fillStyle=mute;k.textAlign='right';k.fillText('your calm: '+Math.round(g.basePulse),r,12);k.fillText('blinks',r,b1+20);
  k.textAlign='left';k.fillText('0:00',l,h-3);k.textAlign='right';k.fillText(clock(tEnd),r,h-3);k.textAlign='center';k.fillText('you',(l+r)/2,h-3);
