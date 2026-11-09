@@ -1,0 +1,3 @@
+{ "name": "hush", "private": true, "version": "0.1.0", "main": "main.cjs",
+  "scripts": { "build": "node gen-metrics.cjs && esbuild body.js --bundle --outfile=dist/body.bundle.js --platform=browser --format=iife --log-level=warning && esbuild preload.js --bundle --outfile=dist/preload.bundle.js --platform=node --external:electron --log-level=warning", "start": "npm run build && electron .", "test": "node test.cjs" },
+  "dependencies": { "@smartspectra/node-sdk": "3.4.0" }, "devDependencies": { "electron": "43.2.0", "esbuild": "^0.25.0" } }

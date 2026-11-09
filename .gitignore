@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.webm
+*.mp4
+.env
+# internal notes, not part of the public repo
+PLAN.md
+DEV_POST_DRAFT.md

@@ -1,0 +1,132 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Hush</title>
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:Georgia,serif;color:#d8d2c4}
+canvas{position:fixed;inset:0;width:100%;height:100%}
+#o{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;pointer-events:none}
+#o .c{max-width:560px;padding:28px 36px;background:rgba(6,6,8,.82);border:1px solid #3a3226;border-radius:4px;pointer-events:auto}
+h1{font-weight:400;letter-spacing:.32em;margin:0 0 14px;font-size:44px}p{line-height:1.55;margin:10px 0;font-size:17px}small{color:#8e8775;font-size:13px;line-height:1.5;display:block;margin-top:12px}
+button{margin-top:16px;background:#1a1712;color:#efe7d4;border:1px solid #6a5a3e;padding:11px 26px;font:17px Georgia,serif;cursor:pointer}button:hover{background:#2a241a}</style></head>
+<body><canvas id="v"></canvas><div id="o"></div>
+<script src="art.js" onerror="void 0"></script><script src="game.js"></script><script src="mock.js"></script><script src="dist/body.bundle.js" onerror="void 0"></script>
+<script>
+const cv=document.getElementById('v'),x=cv.getContext('2d'),O=document.getElementById('o');
+const qs=new URLSearchParams(location.search),MOCK=qs.has('mock')||!window.hushBody,RECORD=qs.has('record'),MOSAIC=qs.get('record')=='mosaic';
+if(RECORD)Object.assign(Hush.CFG,{duration:70,calib:12,blinkStep:2.2,baseDrift:.8}); // short demo round, shown on screen as such
+// Art ships as data: URLs. A file:// image would taint the canvas and stop the demo recorder.
+const ART={};for(const k in window.HUSH_ART||{}){const i=new Image();i.onload=()=>ART[k]=i;i.src=HUSH_ART[k]}
+function cover(i,z,ox,oy){const s=Math.max(W/i.width,H/i.height)*z,w=i.width*s,h=i.height*s;x.drawImage(i,(W-w)/2+(ox||0),(H-h)/2+(oy||0),w,h)}
+let W,H;function rs(){W=cv.width=innerWidth*devicePixelRatio;H=cv.height=innerHeight*devicePixelRatio}addEventListener('resize',rs);rs();
+const keys={};addEventListener('keydown',e=>{if(e.key=='p')keys.panic=1;if(e.key=='c')keys.calm=1;if(e.key=='l')keys.lost=1});addEventListener('keyup',e=>{if(e.key=='p')keys.panic=0;if(e.key=='c')keys.calm=0;if(e.key=='l')keys.lost=0});
+let seen=false,blocked=false,hint='',camS=null,master=null,recDest=null,rec=null,raw=[],g=null,mock=window.MockBody(),sig={pulse:0,breath:0,blink:false,conf:0,wave:0},trace=new Array(320).fill(0),ac=null,beatT=0,shake=0;
+// Real pressure trace is relative: normalize to the recent range for drawing.
+function onBody(s){const b=sig.blink||s.blink;if(s.pulse>0)seen=true;sig={...sig,...s,blink:b,conf:blocked?0:s.conf};for(const v of s.waves||[]){raw.push(v);if(raw.length>320)raw.shift();const lo=Math.min(...raw),hi=Math.max(...raw);trace.push(hi>lo?(v-lo)/(hi-lo):0);trace.shift()}}
+function thump(v){if(!ac)return;const t=ac.currentTime,o=ac.createOscillator(),a=ac.createGain();o.type='sine';o.frequency.setValueAtTime(70,t);o.frequency.exponentialRampToValueAtTime(34,t+.14);a.gain.setValueAtTime(.0001,t);a.gain.exponentialRampToValueAtTime(v,t+.012);a.gain.exponentialRampToValueAtTime(.0001,t+.24);o.connect(a).connect(master);o.start(t);o.stop(t+.26)}
+let dread=null;
+function startDread(){if(!ac||dread)return;const o=ac.createOscillator(),o2=ac.createOscillator(),f=ac.createBiquadFilter(),a=ac.createGain();o.type='sawtooth';o2.type='sawtooth';o.frequency.value=41;o2.frequency.value=41.7;f.type='lowpass';f.frequency.value=180;a.gain.value=0;o.connect(f);o2.connect(f);f.connect(a).connect(master);o.start();o2.start();dread=a}
+function setDread(near){if(dread)dread.gain.setTargetAtTime(g&&g.phase=='play'&&!g.paused?.015+near*near*.17:0,ac.currentTime,.3)}
+function show(h){O.innerHTML=h?'<div class="c">'+h+'</div>':'';O.style.display=h?'flex':'none'}
+function consent(){show(`<h1>HUSH</h1><p>Something in the dark hunts by the sound of your body.</p><p>Your webcam reads your <b>pulse</b>, <b>breathing</b> and <b>blinks</b> while you play. Sit back so your head and chest are in the picture, in even light.</p><small>This game saves nothing and has no account. The reading is done by Presage's SmartSpectra SDK, which must sign in to Presage's service over the internet. Presage's own privacy policy covers what its SDK collects. SDK telemetry is switched off. This is a game, not a health tool: it says nothing about your health. It contains flickering light and one sudden scare.</small>${RECORD?'<small><b>Demo recording is on:</b> this short round saves a video of the game '+(MOSAIC?'with your camera blurred to blocks':'and your camera')+' to your Desktop.</small>':''}<button id=go>I agree, turn on the camera</button>`);document.getElementById('go').onclick=begin}
+function setupAudio(){if(ac)return;ac=new (window.AudioContext||window.webkitAudioContext)();master=ac.createGain();master.connect(ac.destination);recDest=ac.createMediaStreamDestination();master.connect(recDest)}
+async function begin(){setupAudio();g=Hush.create();seen=false;show('');startDread();
+ if(MOCK){if(RECORD){camS=camS||await navigator.mediaDevices.getUserMedia({video:{width:640,height:360}});startRec()}return}
+ if(camS){if(RECORD)startRec();return}
+ const apiKey=await window.hushKey();if(!apiKey){show('<h1>No key</h1><p>Start the game with SMARTSPECTRA_API_KEY set in the environment.</p>');return}
+ hushKeyNow=apiKey;await startBody()}
+let hushKeyNow='',restartLog=[],recovering=false,watch=0,lastHint=null,recStep=41,lowPower=false;
+// Slow machine: readings still arrive, so never pause play for it; shed the demo recorder's load instead.
+function lowFps(){if(!RECORD)return;lowPower=true;if(recStep<80){recStep=83;if(recTick)recTick()}}
+let recTick=null;
+async function startBody(){await window.hushBody.start({apiKey:hushKeyNow,onSignal:s=>{clearTimeout(watch);onBody(s)},onStream:s=>{camS=s;if(vid){vid.srcObject=s;vid.play()}if(RECORD)startRec()},
+  onHint:(c,h)=>{clearTimeout(watch);if(c!==lastHint){lastHint=c;console.error('[hush] SDK hint',c,h||'')}if(c===11){lowFps();return}blocked=c!==0&&c!==10;hint=c===0?'':(h||'');if(blocked)sig.conf=0},
+  onError:bodyError})}
+// A dropped reader must not end a run: pause (no signal = paused) and bring it back, then offer a button.
+// At most 4 restarts in any 2 minutes, however many readings arrive in between; a restart that stays silent for 30 s counts as a failure.
+function restartBody(){armWatch();startBody().catch(e=>bodyError(0,e.message))}
+function armWatch(){clearTimeout(watch);watch=setTimeout(()=>{if(g&&(g.phase=='calibrate'||g.phase=='play'))bodyError(0,'No reading arrived after reconnecting')},30000)}
+async function bodyError(c,m){console.error('[hush] SDK error',c,m);if(recovering)return;recovering=true;clearTimeout(watch);sig.conf=0;hint='Reconnecting to the camera…';camS=null;try{await Promise.race([window.hushBody.stop(),new Promise(r=>setTimeout(r,4000))])}catch(e){}window.hushBody.reset();
+ const now=Date.now();restartLog=restartLog.filter(t=>now-t<120000);
+ if(restartLog.length<4){restartLog.push(now);setTimeout(()=>{recovering=false;restartBody()},1500);return}
+ recovering=false;hint='';show('<h1>Sorry</h1><p>The camera reader stopped: '+String(m).replace(/</g,'&lt;')+'</p><small>Code '+c+'</small><button id=go>Try again</button>');document.getElementById('go').onclick=()=>{restartLog=[];show('');restartBody()}}
+// Demo mode only (HUSH_RECORD=1): game + camera + sound into one local file.
+let vid=null;
+function startRec(){if(rec)return;const C=document.createElement('canvas');C.width=960;C.height=540;const c=C.getContext('2d');vid=document.createElement('video');vid.muted=true;vid.srcObject=camS;vid.play();
+ let t0=null;const paint=()=>{c.drawImage(cv,0,0,960,540);if(vid.videoWidth){const w=230,h=w*vid.videoHeight/vid.videoWidth,X=960-w-14,Y=14;if(MOSAIC){c.imageSmoothingEnabled=false;c.drawImage(vid,0,0,vid.videoWidth,vid.videoHeight,X,Y,16,9);c.drawImage(C,X,Y,16,9,X,Y,w,h);c.imageSmoothingEnabled=true}else c.drawImage(vid,X,Y,w,h);c.strokeStyle='#6a5a3e';c.strokeRect(X,Y,w,h);c.fillStyle='#efe7d4';c.font='14px Georgia';c.fillText('live camera',X+8,Y+h-8)}};recTick=()=>{clearInterval(t0);t0=setInterval(paint,recStep)};recTick();
+ const st=C.captureStream(24);recDest.stream.getAudioTracks().forEach(t=>st.addTrack(t));
+ const chunks=[],mr=new MediaRecorder(st,{mimeType:'video/webm;codecs=vp8,opus',videoBitsPerSecond:25e5});mr.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+ mr.onstop=()=>{clearInterval(t0);const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(chunks,{type:'video/webm'}));a.download='hush-demo.webm';a.click();rec=null};mr.start(1000);rec=mr}
+function stopRec(){if(rec&&rec.state!='inactive')setTimeout(()=>rec&&rec.stop(),2500)}
+function endCard(){const w=g.phase=='won';show(`<h1>${w?'DAWN':'FOUND'}</h1><p>${w?'The light comes back. It never found you.':g.reason=='blink'?'It came on the blink.':'It followed your heartbeat.'}</p><p>It learned your heartbeat at ${Math.round(g.basePulse)}. Blinks it heard: ${g.blinks}.</p><small>${RECORD?'Saving the clip to your Desktop. Wait a few seconds before closing.':'Nothing was saved.'}</small><button id=go>Again</button>`);document.getElementById('go').onclick=begin;stopRec()}
+let last=performance.now();
+function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
+ if(g){const prev=g.phase;if(MOCK){const s=mock.tick(dt,keys);sig=s}
+  Hush.step(g,dt,sig);cues(dt);if(sig.blink&&!MOCK)sig.blink=false;
+  if(prev!='won'&&prev!='caught'&&(g.phase=='won'||g.phase=='caught')){if(g.phase=='caught'){shake=1;scare=1;sting();setTimeout(endCard,1250)}else endCard()}
+  if(sig.pulse>0&&!g.paused){beatT+=dt*sig.pulse/60;if(beatT>=1){beatT-=1;thump(g.phase=='play'?.55:.32);pulseV=1}}
+  if(MOCK){trace.push(sig.wave||0);trace.shift()}}
+ draw(now/1000,dt);requestAnimationFrame(frame)}
+let pulseV=0,scare=0,dawn=0,cueT=0,cueS='',lastBl=0;
+// One short line says which part of your body it just reacted to.
+function cues(dt){cueT=Math.max(0,cueT-dt);if(!g||g.phase!='play'||g.paused){lastBl=g?g.blinks:0;return}
+ if(g.blinks>lastBl){lastBl=g.blinks;cueS='It heard you blink.';cueT=1.6;return}
+ if(cueT>.5)return;
+ if(sig.breath>0&&sig.breath<g.baseBreath-1){cueS='Your breath slows. It loses the trail.';cueT=1.8}
+ else if(sig.pulse>g.basePulse+3){cueS='Your heart is giving you away.';cueT=1.8}}
+// One short shriek when it reaches you.
+function sting(){if(!ac)return;const t=ac.currentTime,n=ac.sampleRate*.9|0,b=ac.createBuffer(1,n,ac.sampleRate),d=b.getChannelData(0);for(let i=0;i<n;i++)d[i]=Math.random()*2-1;const s=ac.createBufferSource(),f=ac.createBiquadFilter(),a=ac.createGain();s.buffer=b;f.type='bandpass';f.Q.value=3;f.frequency.setValueAtTime(2600,t);f.frequency.exponentialRampToValueAtTime(500,t+.85);a.gain.setValueAtTime(.0001,t);a.gain.exponentialRampToValueAtTime(.8,t+.02);a.gain.exponentialRampToValueAtTime(.0001,t+.88);s.connect(f).connect(a).connect(master);s.start(t)}
+// The Listener: a gaunt shrouded figure, head slightly bowed, arms down past the knees, ragged swaying hem.
+function drawFigure(cx,hz,fh,fw,t){const top=hz-fh*.62,sh=hz-fh*.33,hip=hz+fh*.12,foot=hz+fh*.58,sway=Math.sin(t*.7)*fw*.03;
+ x.fillStyle='#0a0908';x.beginPath();
+ x.moveTo(cx-fw*.14+sway,top+fh*.13);x.quadraticCurveTo(cx-fw*.17+sway,top,cx+sway,top);x.quadraticCurveTo(cx+fw*.17+sway,top,cx+fw*.14+sway,top+fh*.13);
+ x.lineTo(cx+fw*.12,sh-fh*.04);x.quadraticCurveTo(cx+fw*.46,sh-fh*.02,cx+fw*.5,sh+fh*.1);
+ x.lineTo(cx+fw*.6,hip+fh*.26);x.lineTo(cx+fw*.54,hip+fh*.3);x.lineTo(cx+fw*.38,sh+fh*.16);x.lineTo(cx+fw*.3,hip);
+ const n=11,w=fw*.42;
+ for(let i=0;i<=n;i++){const k=i/n,X=cx+w-(2*w)*k,rag=Math.sin(i*13.7)*.5+.5,d=(i%2?.0:.05+rag*.07)*fh,s=Math.sin(t*1.1+i*1.9)*fw*.035;x.lineTo(X+s,foot-d)}
+ x.lineTo(cx-fw*.3,hip);x.lineTo(cx-fw*.38,sh+fh*.16);x.lineTo(cx-fw*.54,hip+fh*.3);x.lineTo(cx-fw*.6,hip+fh*.26);x.lineTo(cx-fw*.5,sh+fh*.1);
+ x.quadraticCurveTo(cx-fw*.46,sh-fh*.02,cx-fw*.12,sh-fh*.04);x.closePath();x.fill();
+ // finger slivers
+ x.lineWidth=Math.max(1,fw*.014);x.strokeStyle='#0a0908';for(const s of[-1,1])for(let f=0;f<4;f++){x.beginPath();x.moveTo(cx+s*fw*.57,hip+fh*.28);x.lineTo(cx+s*fw*(.5+f*.05),hip+fh*(.36+.012*(f%2)));x.stroke()}
+}
+function draw(t,dt){pulseV=Math.max(0,pulseV-dt*3.5);shake=Math.max(0,shake-dt*1.2);
+ dawn=g&&g.phase=='won'?Math.min(1,dawn+dt/3):0;
+ const d=g?g.dist/100:1,near=1-d,fl=g?g.flicker:0;setDread(near);
+ x.setTransform(1,0,0,1,0,0);x.fillStyle='#040405';x.fillRect(0,0,W,H);
+ x.save();x.translate((Math.random()-.5)*shake*30,(Math.random()-.5)*shake*30);
+ const cx=W/2,hz=H*(ART.corridor?.5:.56);
+ // corridor walls: lines converging on the vanishing point
+ if(ART.corridor){x.globalAlpha=Math.min(1,.62+.2*near+.22*pulseV+fl*.5+dawn);cover(ART.corridor,1.07+near*.12+.006*pulseV,-W*.017+Math.sin(t*.23)*W*.006,Math.sin(t*.31)*H*.005);x.globalAlpha=1}
+ else{x.strokeStyle='rgba(120,108,88,'+(.17+.12*pulseV)+')';x.lineWidth=2;
+ for(let i=-6;i<=6;i++){x.beginPath();x.moveTo(cx+i*W*.16,H);x.lineTo(cx+i*W*.012,hz);x.stroke()}
+ for(let z=0;z<9;z++){const k=Math.pow(z/8,2.2),y=hz+(H-hz)*k;x.beginPath();x.moveTo(0,y);x.lineTo(W,y);x.stroke()}}
+ // dim light at the far end of the corridor, so the figure reads as a silhouette (no blur: cheap on any machine)
+ const hg=x.createRadialGradient(cx,hz,0,cx,hz,H*.55);hg.addColorStop(0,'rgba(150,130,98,'+((ART.corridor?.1:.34)+near*.16+.05*pulseV)+')');hg.addColorStop(1,'rgba(150,130,98,0)');x.fillStyle=hg;x.fillRect(0,0,W,H);
+ // the Listener: grows as it nears, flickers in on blinks
+ const sc=.08+near*near*1.05,fh=H*sc,fw=fh*.42,vis=ART.listener?.32+near*.66:.55+near*.4;
+ x.globalAlpha=Math.min(1,vis*(fl>0?(.6+Math.random()*.4):1))*(1-dawn);
+ x.shadowColor='rgba(150,130,95,'+(.35+near*.35)+')';x.shadowBlur=lowPower?0:26*devicePixelRatio;
+ if(ART.listener){x.shadowBlur=0;const i=ART.listener,ih=fh*1.28,iw=ih*i.width/i.height,sw=Math.sin(t*.7)*fw*.05,ix=cx-iw/2+sw,iy=Math.max(hz-ih*.52,H*.02);
+  const a=x.globalAlpha,u=x.createRadialGradient(cx+sw,hz,0,cx+sw,hz,ih*.46);u.addColorStop(0,'rgba(0,0,0,'+.92*a+')');u.addColorStop(.7,'rgba(0,0,0,'+.75*a+')');u.addColorStop(1,'rgba(0,0,0,0)');x.fillStyle=u;x.fillRect(ix-iw,iy,iw*3,ih);
+  x.globalCompositeOperation='screen';x.drawImage(i,ix,iy,iw,ih);x.globalCompositeOperation='source-over'}
+ else{drawFigure(cx,hz,fh,fw,t);x.shadowBlur=0;
+ const ey=hz-fh*.47;x.fillStyle='rgba(230,214,170,'+(.35+near*.6)+')';
+ for(const s of[-1,1]){x.beginPath();x.ellipse(cx+s*fw*.085,ey,fw*.035,fw*.012+fw*.022*pulseV,0,0,7);x.fill()}}
+ x.globalAlpha=1;
+ if(fl>0){x.fillStyle='rgba(240,232,210,'+(fl*.14)+')';x.fillRect(0,0,W,H)}
+ // vignette tightens with distance and beats with your pulse
+ const r=Math.max(W,H)*(.62-.26*near-.04*pulseV),gr=x.createRadialGradient(cx,hz,r*.12,cx,hz,r);gr.addColorStop(0,'rgba(0,0,0,0)');gr.addColorStop(1,'rgba(0,0,0,'+(.82+.15*near)*(1-.8*dawn)+')');x.fillStyle=gr;x.fillRect(0,0,W,H);
+ if(dawn>0){x.globalCompositeOperation='screen';const dg=x.createLinearGradient(0,0,W,H*.4);dg.addColorStop(0,'rgba(255,186,120,'+.62*dawn+')');dg.addColorStop(1,'rgba(255,150,90,'+.12*dawn+')');x.fillStyle=dg;x.fillRect(0,0,W,H);x.globalCompositeOperation='source-over'}
+ x.restore();
+ if(scare>0){scare=Math.max(0,scare-dt/1.2);if(ART.face){x.globalAlpha=Math.min(1,scare*3);cover(ART.face,1.02+(1-scare)*.5,(Math.random()-.5)*W*.03*scare,(1-scare)*H*.2+(Math.random()-.5)*H*.03*scare);x.globalAlpha=1}else{x.fillStyle='rgba(230,225,210,'+scare*.5+')';x.fillRect(0,0,W,H)}return}
+ if(!g)return;
+ // live waveform, bottom edge
+ const ty=H*.93,th=H*.05;x.strokeStyle='rgba(200,70,60,.8)';x.lineWidth=2.5*devicePixelRatio;x.beginPath();
+ trace.forEach((v,i)=>{const px=i/trace.length*W*.4+W*.3,py=ty-Math.min(1,Math.abs(v))*th;i?x.lineTo(px,py):x.moveTo(px,py)});x.stroke();
+ x.font=20*devicePixelRatio+'px Georgia';x.textAlign='center';x.fillStyle='rgba(216,210,196,.75)';
+ const lab=g.phase=='calibrate'?'Sit still. It is learning your heartbeat… '+Math.max(0,Math.ceil(Hush.CFG.calib-g.calibT)):g.phase=='play'?(Math.floor((Hush.CFG.duration-g.t)/60)+':'+String(Math.floor((Hush.CFG.duration-g.t)%60)).padStart(2,'0')+' until dawn'+(RECORD?' (short demo round)':'')):'';
+ if(lab)x.fillText(lab,cx,H*.87);
+ if(g.phase=='calibrate'){x.font=26*devicePixelRatio+'px Georgia';x.fillStyle='rgba(239,231,212,.9)';const tip=['It hunts by the sound of your body.','Every blink, it moves.','If your heart races, it hears you.','Breathe slowly and it loses you.'][Math.floor(g.calibT/5)%4];x.fillText(tip,cx,H*.3)}
+ if(cueT>0&&g.phase=='play'){x.font=26*devicePixelRatio+'px Georgia';x.fillStyle='rgba(239,231,212,'+Math.min(1,cueT*2)+')';x.fillText(cueS,cx,H*.13);x.font=20*devicePixelRatio+'px Georgia'}
+ if(g.pulse){x.textAlign='left';x.fillText('♥ '+Math.round(g.pulse),W*.04,ty);x.textAlign='right';x.fillText('breath '+Math.round(g.breath),W*.96,ty)}
+ if(g.paused||(!MOCK&&!seen)){x.textAlign='center';x.fillStyle='#efe7d4';x.font=28*devicePixelRatio+'px Georgia';x.fillText(!seen&&!MOCK&&!hint?'Finding your heartbeat. Look at the screen.':(hint||'I can\'t see you. Step back into the light.'),cx,H*.35)}
+}
+consent();requestAnimationFrame(frame);
+if(qs.has('auto')){begin()}
+</script></body></html>
