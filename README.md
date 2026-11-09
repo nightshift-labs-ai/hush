@@ -10,7 +10,7 @@ A short horror game you play with your body. Something in the dark hunts by soun
 - Your real heartbeat thumps through the speakers and your live waveform draws along the bottom of the screen.
 - If the camera loses you, the game pauses. Losing tracking never costs you anything.
 
-**[Watch the demo](https://hush-demo.nightshift-labs.workers.dev)**: a real player, a real webcam and the live Presage signal, with the camera shown as blocks at the player's choice. **[Try it in your browser](https://hush-demo.nightshift-labs.workers.dev/play/)** with a simulated body: no camera, no key, keyboard needed.
+**[Watch the demo](https://hush-demo.nightshift-labs.workers.dev)**: a real player, a real webcam and the live Presage signal, with the camera shown as blocks at the player's choice. **[Try it in your browser](https://hush-demo.nightshift-labs.workers.dev/play/)** with a simulated body: no camera and no key, on desktop or phone.
 
 ## Run
 Needs Node 20+ and a free Presage API key from https://physiology.presagetech.com/auth/register.
