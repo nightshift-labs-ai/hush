@@ -22,7 +22,7 @@ if ($missing) {
   $problems += "Visual C++ runtime files are missing ($($missing -join ', ')). Install it (asks for admin): winget install Microsoft.VCRedist.2015+.x64"
 }
 if ((Test-Path node_modules) -and -not (Test-Path 'node_modules\electron\dist\electron.exe')) {
-  $problems += 'node_modules is not a Windows install (copied from Linux, or incomplete). Delete node_modules and dist, then run this again.'
+  $problems += 'electron.exe is missing. Run: node node_modules/electron/install.js  If that does not help (for example the folder was copied from Linux), delete node_modules and dist, run npm install, and try again.'
 }
 if ((Get-Location).Path -match '[^\x00-\x7F]') {
   $problems += 'This folder path has non-English letters, which native libraries often cannot open. Copy the app to a plain path such as C:\hush and run it there.'
